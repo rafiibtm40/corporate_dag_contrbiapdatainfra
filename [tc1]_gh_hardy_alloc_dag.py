@@ -10,11 +10,11 @@ import numpy as np
 
 # Constants
 SOURCE_TABLE = 'biap-datainfra-gcp.ckp_dds.gh_status' # ckp_dds
-JOINED_TABLE_ONE = 'biap-datainfra-gcp.ckp_dds.harvest'# ckp_dds
+JOINED_TABLE_ONE = 'biap-datainfra-gcp.ckp_dds.harvest_test'# ckp_dds
 JOINED_TABLE_TWO = 'biap-datainfra-gcp.ckp_dds.gh_master' # ckp_dds
 JOINED_TABLE_THREE = 'biap-datainfra-gcp.ckp_dds.batch_master' # ckp_dds
 JOINED_TABLE_FOUR = 'biap-datainfra-gcp.global_dds.harvest_master' # global_dds
-JOINED_TABLE_FIVE = 'biap-datainfra-gcp.batamindo_ckp_dds.sakata_hst_ideal_yield' 
+JOINED_TABLE_FIVE = 'biap-datainfra-gcp.global_dds.sakata_hst_ideal_yield' 
 JOINED_TABLE_SIX = 'biap-datainfra-gcp.ckp_dds.tank_groupping' # ckp_dds
 JOINED_TABLE_SEVEN = 'biap-datainfra-gcp.global_dds.vegetable_master' # global_dds
 TARGET_TABLE = 'biap-datainfra-gcp.batamindo_ckp_dvm.raw_gh_status_for_gh_hardy_allocation' #batamindo ckp_dvm
@@ -191,7 +191,8 @@ def transform_data_two(**kwargs):  # join aggregated_df with gh_master
         no_of_gables, 
         tandon_netsuite, 
         phase_breakdown,
-        no_of_polybags
+        no_of_polybags,
+        tank_assign
     FROM {JOINED_TABLE_TWO}
     """
     gm_df = client.query(query).to_dataframe()
@@ -201,7 +202,7 @@ def transform_data_two(**kwargs):  # join aggregated_df with gh_master
     gm_df.rename(columns={'gh_code': 'gh_name'}, inplace=True)
     
     # Left join aggregated_df with gm_df
-    aggregated_df_gh_master = pd.merge(aggregated_df, gm_df[['gh_name', 'gh_long_name', 'phase_breakdown', 'area_sqm', 'no_of_gables', 'tandon_netsuite', 'no_of_polybags']], 
+    aggregated_df_gh_master = pd.merge(aggregated_df, gm_df[['gh_name', 'gh_long_name', 'phase_breakdown', 'area_sqm', 'no_of_gables', 'tandon_netsuite', 'no_of_polybags','tank_assign']], 
                                        on='gh_name', how='left')
     logger.info("Enriched aggregated_df with gm_df data.")
     

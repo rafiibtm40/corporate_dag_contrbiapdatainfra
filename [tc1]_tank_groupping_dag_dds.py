@@ -12,7 +12,7 @@ import pytz
 SOURCE_TABLE_HISTORY = 'biap-datainfra-gcp.ckp_stg.ckp_mitra_history'
 SOURCE_TABLE_ALLOCATION = 'biap-datainfra-gcp.ckp_stg.pic_gh_allocation_history'
 TARGET_TABLE = 'biap-datainfra-gcp.ckp_dds.tank_groupping' # Change to DDS
-TARGET_TABLE_ERROR = 'biap-datainfra-gcp.batamindo_ckp_dds.tank_groupping_error'  # Ensure this is defined
+TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.tank_groupping_error'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
 
 # Set up logging

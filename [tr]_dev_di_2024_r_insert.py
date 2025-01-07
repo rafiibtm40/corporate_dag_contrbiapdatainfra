@@ -8,7 +8,7 @@ import logging
 import pytz
 
 # Constants
-SOURCE_TABLE = 'biap-datainfra-gcp.ckp_stg_dev.daily_inbound_2024'  # Adjust to ckp_dds
+SOURCE_TABLE = 'biap-datainfra-gcp.ckp_stg.daily_inbound_2024_test'  # Adjust to ckp_dds
 TARGET_TABLE_PASSED = 'biap-datainfra-gcp.ckp_dds.harvest'  # Adjust to ckp_dds
 TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.daily_inbound_2024_err'  # Adjust to ckp_dds
 STAGING_TABLE = 'biap-datainfra-gcp.ckp_stg.daily_inbound_staging'  # Adjust to ckp_dds

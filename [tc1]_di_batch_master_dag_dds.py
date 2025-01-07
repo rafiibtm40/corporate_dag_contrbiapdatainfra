@@ -10,7 +10,7 @@ from google.cloud import bigquery
 # Constants
 SOURCE_TABLE = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_batch_master'
 TARGET_TABLE_PASSED = 'biap-datainfra-gcp.ckp_dds.batch_master' # adjust to ckp_dds
-TARGET_TABLE_ERROR = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_batch_master_err'
+TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.batch_master_err'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
 LOOKUP_TABLE_ONE = 'biap-datainfra-gcp.ckp_dds.gh_master' # adjust to ckp_dds
 LOOKUP_TABLE_TWO = 'biap-datainfra-gcp.global_dds.vegetable_master' # adjust to ckp_dds

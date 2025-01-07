@@ -9,7 +9,7 @@ import pytz
 
 # Constants
 SOURCE_TABLE = 'biap-datainfra-gcp.ckp_stg.gh_construction'
-TARGET_TABLE_PASSED = 'biap-datainfra-gcp.ckp_dds.gh_master' # switch to ckp_dds
+TARGET_TABLE_PASSED = 'biap-datainfra-gcp.ckp_dds.gh_master'
 TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.gh_construction_err'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
 
@@ -59,7 +59,7 @@ def extract_data(query):
 def extract_task_func(**kwargs):
     query = f"""
     SELECT phase, phase_breakdown, site, nama_gh, type, area_sqm, gable, 
-           table, holes_or_polybag, tandon, tandon_netsuite, gh_code, gh_code_lama, phase_complete
+           table, holes_or_polybag, tandon, tandon_netsuite, gh_code, gh_code_lama, phase_complete, tank_assign
     FROM `{SOURCE_TABLE}`
     """
     df = extract_data(query)
@@ -85,7 +85,8 @@ def transform_task_func(**kwargs):
         'table': 'no_of_tables',
         'holes_or_polybag': 'no_of_polybags',
         'tandon': 'tandon_name',
-        'tandon_netsuite': 'tandon_netsuite'
+        'tandon_netsuite': 'tandon_netsuite',
+        'tank_assign':'tank_assign'
     }, inplace=True)
 
     # Convert 'no_of_tables' from string to integer, handling NaN values
@@ -168,7 +169,7 @@ def deliver_passed_data(**kwargs):
             'phase', 'gh_long_name', 'construction_type', 
             'area_sqm', 'no_of_gables', 'no_of_tables', 'no_of_polybags', 
             'tandon_name', 'tandon_netsuite', 'loading_datetime', 
-            'gh_code', 'gh_code_lama','phase_breakdown', 'phase_complete'
+            'gh_code', 'gh_code_lama','phase_breakdown', 'phase_complete','tank_assign'
         ]]
 
         client = get_bigquery_client()
@@ -212,7 +213,7 @@ def deliver_error_data(**kwargs):
             'area_sqm', 'no_of_gables', 'no_of_tables', 'no_of_polybags', 
             'tandon_name', 'tandon_netsuite', 'gh_name_na', 
             'gh_name_count', 'loading_datetime', 'flagging', 
-            'gh_code', 'gh_code_lama', 'phase_complete'
+            'gh_code', 'gh_code_lama', 'phase_complete','tank_assign'
         ]]
 
         client = get_bigquery_client()

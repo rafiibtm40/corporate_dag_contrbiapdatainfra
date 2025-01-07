@@ -8,7 +8,7 @@ import logging
 import pytz
 
 # Constants
-SOURCE_TABLE = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_harvest_master'
+SOURCE_TABLE = 'biap-datainfra-gcp.global_stg.harvest_master'
 TARGET_TABLE_PASSED = 'biap-datainfra-gcp.global_dds.harvest_master'
 TARGET_TABLE_ERROR = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_harvest_master_err'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
