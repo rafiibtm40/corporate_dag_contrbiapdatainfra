@@ -9,9 +9,9 @@ from datetime import datetime
 import pytz
 
 # Constants
-SOURCE_TABLE = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_gh_status'
+SOURCE_TABLE = 'biap-datainfra-gcp.ckp_stg.gh_status'
 TARGET_TABLE_PASSED = 'biap-datainfra-gcp.ckp_dds.gh_status'
-TARGET_TABLE_ERROR = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_gh_status_err'
+TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.gh_status_err'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
 LOOKUP_TABLE = 'biap-datainfra-gcp.ckp_dds.batch_master'
 
@@ -73,15 +73,18 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     transformed_df['loading_datetime'] = datetime.now(tz).strftime('%Y-%m-%d %H:%M:%S')
 
     # Group by to check for duplicates
-    grouped = transformed_df.groupby(['batch_id', 'gh_name', 'vegetable_variety', 'start_date']).size().reset_index(name='count')
+    grouped = transformed_df.groupby(['batch_id', 'gh_name', 'vegetable_variety', 'start_date','status','actual_population']).size().reset_index(name='count')
 
     # Identify duplicates
     duplicates = grouped[grouped['count'] > 1]
 
     # Create error_df and passed_df based on duplicates
     if not duplicates.empty:
-        error_df = transformed_df[transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1))]
-        passed_df = transformed_df[~transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1))]
+        # Mark rows as duplicates
+        transformed_df['error_flag'] = 'Duplicate'
+        transformed_df['pk_count'] = transformed_df.groupby(['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status', 'actual_population']).size().reset_index(name='pk_count')['pk_count']
+        error_df = transformed_df[transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status','actual_population']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1))]
+        passed_df = transformed_df[~transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status','actual_population']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1))]
     else:
         passed_df = transformed_df
         error_df = pd.DataFrame(columns=transformed_df.columns)  # Create an empty DataFrame for errors if no duplicates found
@@ -91,11 +94,18 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     existing_batches.reset_index(drop=True, inplace=True)  # Reset index to ensure alignment
     valid_batch_ids = passed_df['batch_id'].isin(existing_batches['batch_id'])
 
+    # Add FK error flag
+    if not valid_batch_ids.all():  # If some records failed the FK check
+        passed_df['error_flag'] = passed_df['error_flag'].fillna('') + ', Not Passed FK Check'
+        passed_df['fk_error_description'] = 'Not Passed FK Check'
+
     # Apply valid_batch_ids using the correct indexing
     passed_df = passed_df[valid_batch_ids].reset_index(drop=True)
 
     if passed_df.shape[0] < valid_batch_ids.sum():  # Check against the count of valid_batch_ids
         invalid_batch_df = transformed_df[~valid_batch_ids].reset_index(drop=True)
+        invalid_batch_df['error_flag'] = 'Not Passed FK Check'
+        invalid_batch_df['fk_error_description'] = 'Not Passed FK Check'
         error_df = pd.concat([error_df, invalid_batch_df]).drop_duplicates()
 
     # Log the DataFrame shapes
@@ -127,6 +137,8 @@ def load_passed_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
            AND target.gh_name = source.gh_name
            AND target.start_date = source.start_date
            AND target.vegetable_variety = source.vegetable_variety
+           AND target.status = source.status
+           AND target.actual_population = source.actual_population
         WHEN MATCHED AND (target.status != source.status OR 
                            target.leader != source.leader OR
                            target.pic != source.pic OR
@@ -171,6 +183,7 @@ def load_error_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
             logging.info("Error data loaded successfully.")
         except Exception as e:
             logging.error(f"Failed to load error data: {str(e)}")
+
 
 # Define the DAG
 default_args = {

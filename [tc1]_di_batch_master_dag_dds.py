@@ -8,7 +8,7 @@ import logging
 from google.cloud import bigquery
 
 # Constants
-SOURCE_TABLE = 'biap-datainfra-gcp.batamindo_stg_dev.ckp_batch_master'
+SOURCE_TABLE = 'biap-datainfra-gcp.ckp_stg.batch_master'
 TARGET_TABLE_PASSED = 'biap-datainfra-gcp.ckp_dds.batch_master' # adjust to ckp_dds
 TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.batch_master_err'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
