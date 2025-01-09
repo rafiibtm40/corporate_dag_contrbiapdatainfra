@@ -83,8 +83,8 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
         # Mark rows as duplicates
         transformed_df['error_flag'] = 'Duplicate'
         transformed_df['pk_count'] = transformed_df.groupby(['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status', 'actual_population']).size().reset_index(name='pk_count')['pk_count']
-        error_df = transformed_df[transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status','actual_population']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1))]
-        passed_df = transformed_df[~transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status','actual_population']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date']].apply(tuple, axis=1))]
+        error_df = transformed_df[transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status','actual_population']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date','status','actual_population']].apply(tuple, axis=1))]
+        passed_df = transformed_df[~transformed_df[['batch_id', 'gh_name', 'vegetable_variety', 'start_date', 'status','actual_population']].apply(tuple, axis=1).isin(duplicates[['batch_id', 'gh_name', 'vegetable_variety', 'start_date','status','actual_population']].apply(tuple, axis=1))]
     else:
         passed_df = transformed_df
         error_df = pd.DataFrame(columns=transformed_df.columns)  # Create an empty DataFrame for errors if no duplicates found

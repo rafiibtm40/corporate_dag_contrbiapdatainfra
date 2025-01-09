@@ -16,8 +16,8 @@ TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.tank_groupping_error'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
 
 # Set up logging
-logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger('airflow.task')
+logger.setLevel(logging.INFO)
 
 def get_bigquery_client(service_account_path=SERVICE_ACCOUNT_PATH):
     credentials = service_account.Credentials.from_service_account_file(service_account_path)
@@ -52,11 +52,10 @@ def extract_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     try:
         # Extract the data from both tables
         df_allocation = client.query(query_allocation).to_dataframe()
+        df_history = client.query(query_history).to_dataframe()
         
         # Rename 'coverage_size' to 'area_sqm'
         df_allocation = df_allocation.rename(columns={'coverage_size': 'area_sqm'})
-        
-        df_history = client.query(query_history).to_dataframe()
         
         logger.info("Data extracted successfully.")
         logger.info(f"Extracted DataFrame from pic_gh_allocation: \n{df_allocation.head()}")
@@ -71,34 +70,21 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     ti = kwargs['ti']
     client = get_bigquery_client(service_account_path)
     
+    # Pull dataframes from XCom
     df_history, df_allocation = ti.xcom_pull(task_ids='extract_data')
     
     if df_history is None or df_history.empty or df_allocation is None or df_allocation.empty:
         logger.error("No data returned from extract_data. Aborting transform.")
         raise ValueError("No data returned from extract_data.")
     
-    # Perform an inner join between df_allocation and df_history on 'gh_name'
-    merged_df = pd.merge(
-        df_allocation, 
-        df_history[['gh_name', 'farmer_name', 'farmer_id', 'tank_assign', 'status', 'ho_date', 'end_date']], 
-        left_on='gh', 
-        right_on='gh_name', 
-        how='left'
-    )
-    
-    # Combine 'farmer_name' and 'pic_1' into a new column 'farmer_name_combined'
-    merged_df['farmer_name_combined'] = merged_df['farmer_name'].fillna('') + merged_df['pic_1'].fillna('')
-    
-    # Check if 'tank_assign' and 'farmer_name_combined' are in the merged DataFrame
-    if 'tank_assign' not in merged_df.columns or 'farmer_name_combined' not in merged_df.columns:
-        logger.error(f"Missing required columns in merged DataFrame: {merged_df.columns.tolist()}")
-        raise KeyError("Missing required columns: 'tank_assign' or 'farmer_name_combined'")
+    # Merge the DataFrames (make sure they have matching columns, e.g., merging on 'gh')
+    merged_df = df_history
 
     # Check for records with missing required fields and handle errors
     error_df = merged_df[merged_df.isnull().any(axis=1)].reset_index(drop=True)
     
-    # Drop rows with missing values in 'farmer_name_combined' and 'tank_assign' as these are required fields
-    passed_df = merged_df.dropna(subset=['farmer_name_combined', 'tank_assign'], how='any').reset_index(drop=True)
+    # Drop rows with missing values in 'tank_assign' (required field)
+    passed_df = merged_df.dropna(subset=['tank_assign'], how='any').reset_index(drop=True)
     
     logger.info(f"Transformed DataFrame shape after dropping nulls: {passed_df.shape}")
     
@@ -110,24 +96,22 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     passed_df['loading_datetime'] = pd.to_datetime(passed_df['loading_datetime'])
     
     # Select only the columns that match the BigQuery schema
-    passed_df = passed_df[['gh_name', 'area_sqm', 'pic_1', 'farmer_id', 'farmer_name_combined', 'tank_assign', 'status', 'ho_date', 'end_date', 'loading_datetime']]
+    passed_df = passed_df[['gh_name', 'farmer_id', 'farmer_name', 'tank_assign', 'status', 'ho_date', 'end_date', 'loading_datetime']]
     
     # Rename columns to match target schema if necessary
     passed_df.rename(columns={
-        'pic_1': 'pic_1',  # already correct
         'farmer_id': 'farmer_id',
-        'farmer_name_combined': 'farmer_name_combined',  # renamed to combined farmer name
+        'farmer_name': 'farmer_name',
         'tank_assign': 'tank_assign',
         'status': 'status',
         'ho_date': 'ho_date',
         'end_date': 'end_date',
         'loading_datetime': 'loading_datetime',
         'gh_name': 'gh_name',
-        'area_sqm': 'area_sqm',
     }, inplace=True)
     
     # Drop 'loading_datetime' from error_df as it's not necessary for the error table
-    error_df = error_df[['gh_name', 'area_sqm', 'pic_1', 'farmer_id', 'farmer_name', 'tank_assign', 'status', 'ho_date', 'end_date']]
+    error_df = error_df[['gh_name', 'farmer_id', 'farmer_name', 'tank_assign', 'status', 'ho_date', 'end_date']]
     
     return passed_df, error_df
 

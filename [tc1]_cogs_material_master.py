@@ -77,14 +77,14 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     transformed_df['loading_datetime'] = pd.to_datetime(transformed_df['loading_datetime'])
 
     # Check for records with null required fields and add error handling
-    columns_to_check = ['material_id', 'category_1', 'category_2', 'material_name', 'unit']
+    columns_to_check = ['material_id', 'material_name', 'unit']
     transformed_df = add_null_flags(transformed_df, columns_to_check)
 
     # Identify error records (i.e., rows with null flags)
-    error_df = transformed_df[transformed_df[['material_id', 'category_1', 'category_2', 'material_name', 'unit']].any(axis=1)].reset_index(drop=True)
+    error_df = transformed_df[transformed_df[['material_id', 'material_name', 'unit']].any(axis=1)].reset_index(drop=True)
     
     # Drop rows where any of the required fields (material_id, category_1, etc.) are null
-    passed_df = transformed_df.dropna(subset=['material_id', 'category_1', 'category_2', 'material_name', 'unit'])
+    passed_df = transformed_df.dropna(subset=['material_id', 'material_name', 'unit'])
     
     logger.info(f"Transformed DataFrame shape after dropping nulls: {passed_df.shape}")
 
@@ -101,9 +101,13 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
         error_df = error_df.drop(columns=['material_id_null_flag', 'duplicate_flag'], errors='ignore')
 
     # Prepare passed_df (remove all flags and additional columns meant for error reporting)
-    columns_to_drop = ['material_id_null_flag', 'duplicate_flag', 'material_id_count']
+    columns_to_drop = ['material_id_null_flag', 'duplicate_flag', 'material_id_count', 'flagging', 'error_type', 'error_description', 'material_id_na']
     passed_df = passed_df.drop(columns=[col for col in columns_to_drop if col in passed_df.columns], errors='ignore')
 
+    # Drop null flag columns before returning the data for successful load
+    passed_df = passed_df.drop(columns=[col for col in passed_df.columns if '_null_flag' in col], errors='ignore')
+
+    # Return cleaned dataframes
     return passed_df.reset_index(drop=True), error_df.reset_index(drop=True)
 
 def load_passed_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):

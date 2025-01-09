@@ -10,7 +10,7 @@ import numpy as np
 
 # Constants
 SOURCE_TABLE = 'biap-datainfra-gcp.ckp_dds.gh_status' # ckp_dds
-JOINED_TABLE_ONE = 'biap-datainfra-gcp.ckp_dds.harvest_test'# ckp_dds
+JOINED_TABLE_ONE = 'biap-datainfra-gcp.ckp_dds.harvest'# ckp_dds
 JOINED_TABLE_TWO = 'biap-datainfra-gcp.ckp_dds.gh_master' # ckp_dds
 JOINED_TABLE_THREE = 'biap-datainfra-gcp.ckp_dds.batch_master' # ckp_dds
 JOINED_TABLE_FOUR = 'biap-datainfra-gcp.global_dds.harvest_master' # global_dds
@@ -238,11 +238,24 @@ def transform_data_three(**kwargs):  # join aggregated_df with tank_groupping_hi
     
     # Step 5: Retrieve the pic and pic_2 from dds tank_groupping_history as tmgh_df
     query = f"""
-    SELECT 
-        gh_name, 
-        farmer_name_combined,
-        status 
-    FROM {JOINED_TABLE_SIX}
+        WITH pk_count_query AS (
+        SELECT 
+            gh_name, 
+            farmer_name,
+            status,
+            CASE WHEN end_date IS NULL THEN '2099-12-30' ELSE end_date END AS end_date,
+            ROW_NUMBER() OVER (PARTITION BY gh_name, farmer_name, status ORDER BY end_date) AS row_num
+        FROM {JOINED_TABLE_SIX}
+        WHERE end_date = '2099-12-30' OR end_date IS NULL
+        )
+        SELECT 
+        gh_name,
+        farmer_name,
+        status,
+        end_date
+        FROM pk_count_query
+        WHERE row_num = 1
+        ORDER BY gh_name ASC;
     """
     tmgh_df = client.query(query).to_dataframe()
     logger.info("gh_master data retrieved successfully.")
@@ -250,15 +263,15 @@ def transform_data_three(**kwargs):  # join aggregated_df with tank_groupping_hi
     filtered_tmgh_df = tmgh_df[tmgh_df['status'] == 'active']
     
     # do left join aggregated_df with tmgh_df to fill farmer_name on pic
-    aggregated_df_tmgh = pd.merge(aggregated_df, filtered_tmgh_df[['gh_name','farmer_name_combined']], 
+    aggregated_df_tmgh = pd.merge(aggregated_df, filtered_tmgh_df[['gh_name','farmer_name']], 
                                 on='gh_name', how='left')
-    logger.info("Enriched aggregated_df_tmgh with farmer_name_combined for pic.")
+    logger.info("Enriched aggregated_df_tmgh with farmer_name for pic.")
 
     
     # Ensure 'pic' column is treated as object type (string) to hold 'N/A' values
     aggregated_df_tmgh['pic'] = aggregated_df_tmgh['pic'].fillna('N/A').replace('nan', 'N/A')
-    aggregated_df_tmgh['pic'] = aggregated_df_tmgh['farmer_name_combined']
-    aggregated_df_tmgh.drop(columns=['farmer_name_combined'], inplace=True)
+    aggregated_df_tmgh['pic'] = aggregated_df_tmgh['farmer_name']
+    aggregated_df_tmgh.drop(columns=['farmer_name'], inplace=True)
     # Ensure 'transplant_date' is in datetime format temporarily
     aggregated_df_tmgh['transplant_date'] = pd.to_datetime(aggregated_df_tmgh['transplant_date'])
 
