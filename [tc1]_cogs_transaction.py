@@ -97,7 +97,7 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     transformed_df = add_null_flags(transformed_df, columns_to_check)
 
     # Drop rows where any of the required fields (usage_id, quantity_used) are null
-    passed_df = transformed_df.dropna(subset=['usage_id', 'quantity_used'])
+    passed_df = transformed_df.dropna(subset=['usage_id', 'quantity_used']) #perlu ditambah Item Name
     
     logger.info(f"Transformed DataFrame shape after dropping nulls: {passed_df.shape}")
 

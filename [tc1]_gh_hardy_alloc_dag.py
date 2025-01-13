@@ -15,7 +15,7 @@ JOINED_TABLE_TWO = 'biap-datainfra-gcp.ckp_dds.gh_master' # ckp_dds
 JOINED_TABLE_THREE = 'biap-datainfra-gcp.ckp_dds.batch_master' # ckp_dds
 JOINED_TABLE_FOUR = 'biap-datainfra-gcp.global_dds.harvest_master' # global_dds
 JOINED_TABLE_FIVE = 'biap-datainfra-gcp.global_dds.sakata_hst_ideal_yield' 
-JOINED_TABLE_SIX = 'biap-datainfra-gcp.ckp_dds.tank_groupping' # ckp_dds
+JOINED_TABLE_SIX = 'biap-datainfra-gcp.ckp_dds.tank_groupping_test' # ckp_dds
 JOINED_TABLE_SEVEN = 'biap-datainfra-gcp.global_dds.vegetable_master' # global_dds
 TARGET_TABLE = 'biap-datainfra-gcp.batamindo_ckp_dvm.raw_gh_status_for_gh_hardy_allocation' #batamindo ckp_dvm
 SERVICE_ACCOUNT_PATH = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', '/home/corporate/myKeys/airflowbiapvm.json')
@@ -42,9 +42,6 @@ def extract_data(**kwargs):
             , start_date
             , end_date
             , vegetable_variety
-            , leader
-            , pic
-            , pic_2
             , reason_to_exterminate
             , actual_population
             , loading_datetime
@@ -58,13 +55,10 @@ def extract_data(**kwargs):
         , start_date
         , end_date
         , vegetable_variety
-        , leader
-        , pic
-        , pic_2
         , actual_population
         , loading_datetime
     FROM filtered_data
-    WHERE row_num = 1 AND end_date = '2099-12-31'
+    WHERE row_num >= 1 AND end_date = '2099-12-31'
     ORDER BY gh_name ASC
     """
     df = client.query(query).to_dataframe()
@@ -118,7 +112,6 @@ def transform_data_one(**kwargs):  # join gh_status with jb_df
             ON df_bm.vegetable_variety = df_hm.vegetable_variety
     LEFT JOIN {JOINED_TABLE_SEVEN} AS df_vm
             ON df_vm.vegetable_variant = df_hm.vegetable_variety
-        WHERE df_bm.batch_end_date = '2099-12-31'
     ) AS d1
     LEFT JOIN {JOINED_TABLE_ONE} AS df_inb
         ON df_inb.date BETWEEN d1.transplant_date AND d1.batch_end_date
@@ -138,9 +131,9 @@ def transform_data_one(**kwargs):  # join gh_status with jb_df
     logger.info("Data join completed between batch_master and harvest tables.")
 
     # Step 3: Left join gh_status_df with jb_df on batch_id and gh_name
-    aggregated_df = pd.merge(gh_status_df[['actual_population','batch_id', 'gh_name', 'status', 'start_date', 'end_date', 'leader', 'pic', 'pic_2']], 
+    aggregated_df = pd.merge(gh_status_df[['actual_population','batch_id', 'gh_name', 'status', 'start_date', 'end_date','vegetable_variety']], 
                              jb_df[['vegetable_subcategory','batch_start_date', 'original_population','vegetable_variety', 'gh_name', 'batch_id', 'bruto_kg', 'transplant_date', 'batch_end_date']], 
-                             on=['batch_id', 'gh_name'], how='left')
+                             on=['batch_id', 'gh_name', 'vegetable_variety'], how='left')
     logger.info("Joined gh_status_df with jb_df on batch_id and gh_name.")
     
     
@@ -157,9 +150,6 @@ def transform_data_one(**kwargs):  # join gh_status with jb_df
             'batch_start_date': 'first', 
             'start_date': 'first',
             'end_date': 'first',
-            'leader': 'first',
-            'pic': 'first',
-            'pic_2': 'first',  
             'original_population': 'first',  
             'vegetable_variety': 'first',
             'transplant_date': 'first', 
@@ -242,17 +232,19 @@ def transform_data_three(**kwargs):  # join aggregated_df with tank_groupping_hi
         SELECT 
             gh_name, 
             farmer_name,
-            status,
+            agronomist,
+            block_leader,
             CASE WHEN end_date IS NULL THEN '2099-12-30' ELSE end_date END AS end_date,
-            ROW_NUMBER() OVER (PARTITION BY gh_name, farmer_name, status ORDER BY end_date) AS row_num
+            ROW_NUMBER() OVER (PARTITION BY gh_name, farmer_name, agronomist, block_leader ORDER BY end_date) AS row_num
         FROM {JOINED_TABLE_SIX}
         WHERE end_date = '2099-12-30' OR end_date IS NULL
         )
         SELECT 
         gh_name,
         farmer_name,
-        status,
-        end_date
+        end_date,
+        agronomist,
+        block_leader
         FROM pk_count_query
         WHERE row_num = 1
         ORDER BY gh_name ASC;
@@ -260,21 +252,22 @@ def transform_data_three(**kwargs):  # join aggregated_df with tank_groupping_hi
     tmgh_df = client.query(query).to_dataframe()
     logger.info("gh_master data retrieved successfully.")
     
-    filtered_tmgh_df = tmgh_df[tmgh_df['status'] == 'active']
-    
-    # do left join aggregated_df with tmgh_df to fill farmer_name on pic
-    aggregated_df_tmgh = pd.merge(aggregated_df, filtered_tmgh_df[['gh_name','farmer_name']], 
-                                on='gh_name', how='left')
+    # Do left join aggregated_df with tmgh_df to fill farmer_name on pic
+    aggregated_df_tmgh = pd.merge(aggregated_df, tmgh_df[['gh_name', 'farmer_name', 'agronomist', 'block_leader']], 
+                                  on='gh_name', how='left')
     logger.info("Enriched aggregated_df_tmgh with farmer_name for pic.")
 
+    # Create new column 'pic' and fill it with 'farmer_name' from tmgh_df
+    aggregated_df_tmgh['pic'] = aggregated_df_tmgh['farmer_name']
     
+    # Drop the 'farmer_name' column as it's no longer needed
+    aggregated_df_tmgh.drop(columns=['farmer_name'], inplace=True)
+
     # Ensure 'pic' column is treated as object type (string) to hold 'N/A' values
     aggregated_df_tmgh['pic'] = aggregated_df_tmgh['pic'].fillna('N/A').replace('nan', 'N/A')
-    aggregated_df_tmgh['pic'] = aggregated_df_tmgh['farmer_name']
-    aggregated_df_tmgh.drop(columns=['farmer_name'], inplace=True)
+
     # Ensure 'transplant_date' is in datetime format temporarily
     aggregated_df_tmgh['transplant_date'] = pd.to_datetime(aggregated_df_tmgh['transplant_date'])
-
 
     # Push the final aggregated data to XCom
     kwargs['ti'].xcom_push(key='aggregated_df_three', value=aggregated_df_tmgh)

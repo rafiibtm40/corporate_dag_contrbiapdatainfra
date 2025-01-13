@@ -11,7 +11,7 @@ import pytz
 # Constants
 SOURCE_TABLE_HISTORY = 'biap-datainfra-gcp.ckp_stg.ckp_mitra_history'
 SOURCE_TABLE_ALLOCATION = 'biap-datainfra-gcp.ckp_stg.pic_gh_allocation_history'
-TARGET_TABLE = 'biap-datainfra-gcp.ckp_dds.tank_groupping' # Change to DDS
+TARGET_TABLE = 'biap-datainfra-gcp.ckp_dds.tank_groupping_test'
 TARGET_TABLE_ERROR = 'biap-datainfra-gcp.ckp_stg.tank_groupping_error'
 SERVICE_ACCOUNT_PATH = '/home/corporate/myKeys/airflowbiapvm.json'
 
@@ -29,10 +29,12 @@ def extract_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     # Query for pic_gh_allocation table (with necessary columns)
     query_allocation = f"""
         SELECT 
-            gh,
+            gh_name,
             pic_1,
-            phase,
-            coverage_size
+            block_leader,
+            agronomist,
+            hand_over_date,
+            end_date_helper
         FROM `{SOURCE_TABLE_ALLOCATION}`
     """
     
@@ -78,13 +80,13 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
         raise ValueError("No data returned from extract_data.")
     
     # Merge the DataFrames (make sure they have matching columns, e.g., merging on 'gh')
-    merged_df = df_history
+    merged_df = df_allocation
 
     # Check for records with missing required fields and handle errors
     error_df = merged_df[merged_df.isnull().any(axis=1)].reset_index(drop=True)
     
     # Drop rows with missing values in 'tank_assign' (required field)
-    passed_df = merged_df.dropna(subset=['tank_assign'], how='any').reset_index(drop=True)
+    passed_df = merged_df.dropna(subset=['gh_name'], how='any').reset_index(drop=True)
     
     logger.info(f"Transformed DataFrame shape after dropping nulls: {passed_df.shape}")
     
@@ -96,22 +98,21 @@ def transform_data(service_account_path=SERVICE_ACCOUNT_PATH, **kwargs):
     passed_df['loading_datetime'] = pd.to_datetime(passed_df['loading_datetime'])
     
     # Select only the columns that match the BigQuery schema
-    passed_df = passed_df[['gh_name', 'farmer_id', 'farmer_name', 'tank_assign', 'status', 'ho_date', 'end_date', 'loading_datetime']]
+    passed_df = passed_df[['gh_name', 'pic_1', 'block_leader', 'agronomist', 'hand_over_date', 'end_date_helper', 'loading_datetime']]
     
     # Rename columns to match target schema if necessary
-    passed_df.rename(columns={
-        'farmer_id': 'farmer_id',
-        'farmer_name': 'farmer_name',
-        'tank_assign': 'tank_assign',
-        'status': 'status',
-        'ho_date': 'ho_date',
-        'end_date': 'end_date',
-        'loading_datetime': 'loading_datetime',
+    passed_df.rename(columns={ 
         'gh_name': 'gh_name',
+        'pic_1': 'farmer_name',
+        'block_leader': 'block_leader',
+        'agronomist': 'agronomist',
+        'hand_over_date': 'ho_date',
+        'end_date_helper': 'end_date',
+        'loading_datetime': 'loading_datetime',
     }, inplace=True)
     
-    # Drop 'loading_datetime' from error_df as it's not necessary for the error table
-    error_df = error_df[['gh_name', 'farmer_id', 'farmer_name', 'tank_assign', 'status', 'ho_date', 'end_date']]
+    # Do not include 'loading_datetime' in error_df as it's not necessary for the error table
+    error_df = error_df[['gh_name', 'pic_1', 'block_leader', 'agronomist', 'hand_over_date', 'end_date_helper']]
     
     return passed_df, error_df
 
